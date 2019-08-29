@@ -2,9 +2,8 @@ name: 'Standard Version Action'
 description: 'Automatically enrich PRs with information from standard-version'
 author: 'HMI Logic GmbH'
 inputs:
-#   myInput:
-#     description: 'Input to use'
-#     default: 'world'
+  repo-token:
+    description: 'The GITHUB_TOKEN secret'
 runs:
   using: 'node12'
   main: 'lib/main.js'
