@@ -1,6 +1,6 @@
 {
   "name": "standard-version-action",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "description": "Automatically enrich PRs with information from standard-version",
   "main": "lib/main.js",
