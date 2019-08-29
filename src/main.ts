@@ -1,4 +1,3 @@
-import path from 'path';
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 
@@ -10,6 +9,8 @@ async function run() {
 
     const prNumber = getPrNumber();
     if (!prNumber) {
+      console.log(JSON.stringify(github.context, null, 2));
+
       console.log('Could not get pull request number from context, exiting');
       return;
     }
