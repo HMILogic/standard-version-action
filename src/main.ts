@@ -69,12 +69,10 @@ interface PullRequest {
 }
 
 interface Response {
-  data: {
-    repository: null | {
-      ref: null | {
-        associatedPullRequests: {
-          nodes: PullRequest[];
-        };
+  repository: null | {
+    ref: null | {
+      associatedPullRequests: {
+        nodes: PullRequest[];
       };
     };
   };
@@ -85,18 +83,17 @@ async function getPullRequest(
 ): Promise<PullRequest | undefined> {
   const response: Response = await client.graphql(
     `
-      {
-        repository(owner: $owner, name: $name) {
-          ref(qualifiedName: $ref) {
-            associatedPullRequests(states: OPEN, last: 10) {
-              nodes {
-                number
+    query pullRequests($owner: String!, $repo: String!, $ref: String!) {
+      repository(owner: $owner, name: $repo) {
+        ref(qualifiedName: $ref) {
+          associatedPullRequests(states: OPEN, last: 10) {
+            nodes {
+              number
 
-                commits(last: 1) {
-                  nodes {
-                    commit {
-                      oid
-                    }
+              commits(last: 1) {
+                nodes {
+                  commit {
+                    oid
                   }
                 }
               }
@@ -104,6 +101,7 @@ async function getPullRequest(
           }
         }
       }
+    }
     `,
     {
       owner: github.context.repo.owner,
@@ -114,8 +112,8 @@ async function getPullRequest(
 
   let pullRequest: undefined | PullRequest = undefined;
 
-  if (response.data.repository && response.data.repository.ref) {
-    pullRequest = response.data.repository.ref.associatedPullRequests.nodes.find(
+  if (response.repository && response.repository.ref) {
+    pullRequest = response.repository.ref.associatedPullRequests.nodes.find(
       pr => {
         return pr.commits.nodes.find(
           commit => commit.commit.oid === github.context.sha,
