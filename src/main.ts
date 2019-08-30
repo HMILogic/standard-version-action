@@ -105,7 +105,7 @@ async function getPullRequest(
     `,
     {
       owner: github.context.repo.owner,
-      name: github.context.repo.repo,
+      repo: github.context.repo.repo,
       ref: github.context.ref,
     },
   );
