@@ -1,21 +1,20 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-
 import { exec } from 'child_process';
 
 async function run() {
   try {
     const token = core.getInput('repo-token', { required: true });
+    const client = new github.GitHub(token);
 
-    const prNumber = getPrNumber();
-    if (!prNumber) {
+    const pullRequest = await getPullRequest(client);
+
+    if (!pullRequest) {
+      console.log('Could not get pull request number from context, exiting');
       console.log(JSON.stringify(github.context, null, 2));
 
-      console.log('Could not get pull request number from context, exiting');
       return;
     }
-
-    const client = new github.GitHub(token);
 
     const script = exec(
       './node_modules/.bin/standard-version --dry-run --skip.commit --skip.tag',
@@ -25,25 +24,27 @@ async function run() {
     script.stdout.on('data', data => {
       const changelog = /\-{3}(.+?)\-{3}/s;
       const matches = data.match(changelog);
-      console.log(data);
 
       if (matches) {
-        const log = matches[1].trim();
+        const changelog = matches[1].trim();
 
         const labels: string[] = [];
-        if (log.match('### Feature')) labels.push('Type: Feature');
-        if (log.match('### Bug Fixes')) labels.push('Type: Bug Fix');
-        if (log.match('### BREAKING CHANGES')) labels.push('Breaking Changes');
+        if (changelog.match('### Feature')) labels.push('Type: Feature');
+        if (changelog.match('### Bug Fixes')) labels.push('Type: Bug Fix');
+        if (changelog.match('### BREAKING CHANGES'))
+          labels.push('Breaking Changes');
 
         if (labels.length > 0) {
-          addLabels(client, prNumber, labels);
+          addLabels(client, pullRequest.number, labels);
         }
 
-        // await client.pulls.createComment({
-        //   body: log,
+        // return client.issues.createComment({
+        //   body: changelog,
         //   owner: github.context.repo.owner,
         //   repo: github.context.repo.repo,
-        //   commit_id: github.context.sha,
+        //   issue_number
+
+        //   pull_number: pullRequest.number,
 
         //   // issue_number: prNumber,
         // });
@@ -54,13 +55,80 @@ async function run() {
   }
 }
 
-function getPrNumber(): number | undefined {
-  const pullRequest = github.context.payload.pull_request;
+interface CommitResponse {
+  commit: {
+    oid: string;
+  };
+}
+
+interface PullRequest {
+  number: number;
+  commits: {
+    nodes: CommitResponse[];
+  };
+}
+
+interface Response {
+  data: {
+    repository: null | {
+      ref: null | {
+        associatedPullRequests: {
+          nodes: PullRequest[];
+        };
+      };
+    };
+  };
+}
+
+async function getPullRequest(
+  client: github.GitHub,
+): Promise<PullRequest | undefined> {
+  const response: Response = await client.graphql(
+    `
+      {
+        repository(owner: $owner, name: $name) {
+          ref(qualifiedName: $ref) {
+            associatedPullRequests(states: OPEN, last: 10) {
+              nodes {
+                number
+
+                commits(last: 1) {
+                  nodes {
+                    commit {
+                      oid
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `,
+    {
+      owner: github.context.repo.owner,
+      name: github.context.repo.repo,
+      ref: github.context.ref,
+    },
+  );
+
+  let pullRequest: undefined | PullRequest = undefined;
+
+  if (response.data.repository && response.data.repository.ref) {
+    pullRequest = response.data.repository.ref.associatedPullRequests.nodes.find(
+      pr => {
+        return pr.commits.nodes.find(
+          commit => commit.commit.oid === github.context.sha,
+        );
+      },
+    );
+  }
+
   if (!pullRequest) {
     return undefined;
   }
 
-  return pullRequest.number;
+  return pullRequest;
 }
 
 async function addLabels(
